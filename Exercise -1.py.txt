@@ -1,0 +1,50 @@
+Choose language of your choice Python or Scala
+Data is available in HDFS file system under /public/crime/csv
+You can check properties of files using hadoop fs -ls -h /public/crime/csv
+Structure of data (ID,Case Number,Date,Block,IUCR,Primary Type,Description,Location Description,Arrest,Domestic,Beat,District,Ward,Community Area,FBI Code,X Coordinate,Y Coordinate,Year,Updated On,Latitude,Longitude,Location)
+File format - text file
+Delimiter - “,”
+Get monthly count of primary crime type, sorted by month in ascending and number of crimes per type in descending order
+Store the result in HDFS path /user/<YOUR_USER_ID>/solutions/solution01/crimes_by_type_by_month
+Output File Format: TEXT
+Output Columns: Month in YYYYMM format, crime count, crime type
+Output Delimiter: \t (tab delimited)
+Output Compression: gzip
+
+
+
+
+
+#Python Core Api Solution
+
+CrimeData = sc.textFile("Location")
+Header = CrimeData.first()
+CrimeDataWithoutHeader = CrimeData.filter(lambda line: line != Header)
+
+def bringDate(crime):
+	extractTimestamp = crime.split(",")[2]
+	extractDate = extractTimestamp.split(" ")[0]
+	extractYear = extractDate.split("/")[2]
+	extractMonth = extractDate.split("/")[1]
+	requiredDate = int(extractYear + extractMonth)
+	return requiredDate
+
+
+CriminalRecordsWithMonthAndType = CrimeDataWithoutHeader.map(lambda crime:((bringDate(crime), crime.split(",")[5]),1))
+for i in CriminalRecordsWithMonthAndType.take(20): print(i)
+
+crimeCountPerMonthPerType = CriminalRecordsWithMonthAndType.reduceByKey(lambda total, revenue : total + revenue)
+for i in crimeCountPerMonthPerType.take(20): print(i)
+
+dailyRevenuePerProductNameMap = crimeCountPerMonthPerType.map(lambda rec: ((rec[0][0], -rec[1]), rec[0][1]))
+for i in dailyRevenuePerProductNameMap.take(20): print(i)
+
+crimeCountPerMonthPerTypeSorted = dailyRevenuePerProductNameMap.sortByKey()
+for i in crimeCountPerMonthPerTypeSorted.take(20): print(i)
+
+crimeCountPerMonthPerTypeSortedResults = crimeCountPerMonthPerTypeSorted.map(lambda crime: str(crime[0][0]) + "\t" + str(-crime[0][1]) + "\t" + crime[1])
+for i in crimeCountPerMonthPerTypeSortedResults.take(20): print(i)
+
+crimeCountPerMonthPerTypeSortedResults.repartition(2).saveAsTextFile(path = "Location" ,  compressionCodecClass="org.apache.hadoop.io.compress.GzipCodec")
+
+##########################################################################################################################################################################################
